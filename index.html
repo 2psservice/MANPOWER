@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการพนักงานเรือ (RTDB)</title>
+    <title>ระบบจัดการพนักงานเรือ (RTDB - Public)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,7 +33,7 @@
                         ระบบจัดการพนักงานเรือ
                     </h1>
                     <div class="flex items-center gap-2 mt-1">
-                        <p class="text-slate-500 text-sm">บันทึกและสรุปยอดคนประจำเรือ (RTDB)</p>
+                        <p class="text-slate-500 text-sm">ข้อมูลออนไลน์แบบเรียลไทม์ (Shared)</p>
                         <!-- Status Indicator -->
                         <div id="status-indicator" class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors duration-300 text-slate-500 bg-slate-100 border-slate-200">
                             <i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> <span>กำลังเชื่อมต่อ...</span>
@@ -167,8 +167,7 @@
                         </div>
                         <div class="col-span-2 sm:col-span-1">
                             <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อเรือ</label>
-                            <input type="text" id="shipName" required placeholder="เช่น MV.CSAV RIO NEVADO
-" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input type="text" id="shipName" required placeholder="เช่น เรือโชคชัย 99" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                     </div>
 
@@ -236,7 +235,6 @@
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
 
         // --- Configuration ---
-        // Your web app's Firebase configuration
         const firebaseConfig = {
           apiKey: "AIzaSyAGZvjNNGb3QQSTf39wYV4Y-UVetDHDlMg",
           authDomain: "manpower-c3514.firebaseapp.com",
@@ -248,7 +246,6 @@
           measurementId: "G-7FZ4KGKKGY"
         };
 
-        // ชื่อแอพสำหรับใช้เป็น Path ใน Database (ไม่เกี่ยวกับ Config ของ Firebase)
         const appPathName = 'ship-staff-manager';
         
         // --- Init ---
@@ -260,7 +257,7 @@
         // --- State ---
         let currentUser = null;
         let entries = [];
-        let currentTeams = []; // Temporary storage for teams in modal
+        let currentTeams = []; 
         let currentMonth = new Date().toISOString().slice(0, 7);
 
         // --- DOM Elements ---
@@ -290,7 +287,6 @@
             
             // Auth Flow
             try {
-                // Modified to handle custom token mismatch
                 let signedIn = false;
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try {
@@ -298,7 +294,6 @@
                         signedIn = true;
                     } catch (tokenError) {
                         console.warn("Custom token mismatch (likely due to custom config), trying anonymous auth:", tokenError);
-                        // Fallback: If custom token fails (mismatch), proceed to anonymous auth
                     }
                 }
                 
@@ -339,24 +334,20 @@
         // --- Realtime Database Listener ---
         function setupRealtimeListener() {
             try {
-                // สร้าง Reference ไปยัง Path ใน RTDB
-                // ใช้ appPathName แทน appId เพื่อป้องกันความสับสนกับ appId ของ Firebase Config
-                const dataRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data`);
+                // แก้ไข Path จาก users/${uid} เป็น public/data เพื่อให้เห็นข้อมูลร่วมกันทุกเครื่อง
+                const dataRef = ref(db, `artifacts/${appPathName}/public/data/ship-staff-data`);
                 
-                // ใช้ onValue เพื่อดึงข้อมูลแบบ Realtime
                 onValue(dataRef, (snapshot) => {
                     const dataObj = snapshot.val();
                     let data = [];
                     
                     if (dataObj) {
-                        // แปลง Object { key: val } เป็น Array [{ id: key, ...val }]
                         data = Object.keys(dataObj).map(key => ({
                             id: key,
                             ...dataObj[key]
                         }));
                     }
                     
-                    // Sort by date descending
                     data.sort((a, b) => new Date(b.date) - new Date(a.date));
                     
                     entries = data;
@@ -584,8 +575,8 @@
             const supervisorNames = currentTeams.map(t => t.supervisorName);
 
             try {
-                // สร้าง Reference และ ID ใหม่โดยอัตโนมัติ (push)
-                const dataRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data`);
+                // แก้ไข Path บันทึกเป็น public/data
+                const dataRef = ref(db, `artifacts/${appPathName}/public/data/ship-staff-data`);
                 const newRef = push(dataRef);
                 
                 await set(newRef, {
@@ -609,8 +600,8 @@
         window.deleteEntry = async function(id) {
             if (confirm("ต้องการลบข้อมูลเรือลำนี้ใช่หรือไม่?")) {
                 try {
-                    // ลบข้อมูลที่ path ตาม ID
-                    const itemRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data/${id}`);
+                    // แก้ไข Path ลบเป็น public/data
+                    const itemRef = ref(db, `artifacts/${appPathName}/public/data/ship-staff-data/${id}`);
                     await remove(itemRef);
                 } catch (error) {
                     console.error("Error deleting:", error);
