@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการพนักงานเรือ (RTDB)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 pb-20">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div class="max-w-5xl mx-auto px-4 py-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-blue-900 flex items-center gap-2">
+                        <i data-lucide="anchor" class="w-6 h-6 text-blue-600"></i>
+                        ระบบจัดการพนักงานเรือ
+                    </h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <p class="text-slate-500 text-sm">บันทึกและสรุปยอดคนประจำเรือ (RTDB)</p>
+                        <!-- Status Indicator -->
+                        <div id="status-indicator" class="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors duration-300 text-slate-500 bg-slate-100 border-slate-200">
+                            <i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> <span>กำลังเชื่อมต่อ...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3 bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+                    <i data-lucide="calendar" class="w-5 h-5 text-slate-500 ml-2"></i>
+                    <input 
+                        type="month" 
+                        id="monthFilter"
+                        class="bg-transparent border-none focus:ring-0 text-slate-700 font-medium text-sm outline-none cursor-pointer"
+                    >
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+        
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center py-10">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p class="text-slate-500">กำลังโหลดข้อมูล...</p>
+            <p id="loadingTimer" class="text-xs text-slate-400 mt-2 hidden">หากรอนานเกินไป กรุณากดโหลดใหม่</p>
+        </div>
+
+        <!-- Error State (Hidden by default) -->
+        <div id="errorState" class="hidden text-center py-10">
+            <div class="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 inline-block max-w-md mx-auto">
+                <i data-lucide="alert-circle" class="w-8 h-8 mx-auto mb-2"></i>
+                <p class="font-bold">เกิดข้อผิดพลาด</p>
+                <p id="errorMessage" class="text-sm mt-1 mb-4">ไม่สามารถโหลดข้อมูลได้</p>
+                <button onclick="window.location.reload()" class="px-4 py-2 bg-white border border-red-200 rounded-lg hover:bg-red-50 text-sm font-medium transition-colors">
+                    ลองใหม่อีกครั้ง
+                </button>
+            </div>
+        </div>
+
+        <!-- Content Container (Hidden initially) -->
+        <div id="mainContent" class="hidden">
+            
+            <!-- Dashboard Summary -->
+            <section class="mb-8">
+                <h2 class="text-lg font-semibold mb-4 text-slate-700">สรุปยอดประจำเดือน <span id="displayMonth"></span></h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Total -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-5 border-l-4 border-l-blue-500">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-500 text-sm">ยอดรวมทั้งสิ้น</p>
+                            <i data-lucide="users" class="w-5 h-5 text-blue-500"></i>
+                        </div>
+                        <p class="text-3xl font-bold text-slate-800" id="statTotal">0</p>
+                        <p class="text-xs text-slate-400 mt-1">จากเรือทั้งหมด <span id="statShips">0</span> ลำ</p>
+                    </div>
+                    <!-- Male -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-5 border-l-4 border-l-sky-500">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-500 text-sm">ชาย</p>
+                            <i data-lucide="user" class="w-5 h-5 text-sky-500"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-slate-800" id="statMale">0</p>
+                    </div>
+                    <!-- Female -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-5 border-l-4 border-l-pink-500">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-500 text-sm">หญิง</p>
+                            <i data-lucide="user" class="w-5 h-5 text-pink-500"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-slate-800" id="statFemale">0</p>
+                    </div>
+                    <!-- LGBTQ -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-5 border-l-4 border-l-purple-500">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-500 text-sm">LGBTQ</p>
+                            <i data-lucide="user-check" class="w-5 h-5 text-purple-500"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-slate-800" id="statLgbtq">0</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Ship List -->
+            <section>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-slate-700">รายการเรือ (<span id="shipCount">0</span>)</h2>
+                </div>
+
+                <div id="emptyState" class="hidden text-center py-20 bg-white rounded-xl border border-dashed border-slate-300">
+                    <i data-lucide="anchor" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                    <p class="text-slate-500">ไม่พบข้อมูลเรือในเดือนนี้</p>
+                    <button onclick="openModal()" class="mt-4 text-blue-600 font-medium hover:underline">
+                        + เพิ่มข้อมูลใหม่
+                    </button>
+                </div>
+
+                <div id="shipGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Ship cards will be inserted here -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Floating Action Button -->
+    <button onclick="openModal()" class="fixed bottom-8 right-8 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95 z-20">
+        <i data-lucide="plus" class="w-8 h-8"></i>
+    </button>
+
+    <!-- Modal -->
+    <div id="entryModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="bg-blue-600 px-6 py-4 flex justify-between items-center shrink-0">
+                <h3 class="text-white font-bold text-lg flex items-center gap-2">
+                    <i data-lucide="plus" class="w-5 h-5"></i> เพิ่มข้อมูลเรือ
+                </h3>
+                <button onclick="closeModal()" class="text-white/80 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto custom-scrollbar">
+                <form id="shipForm" onsubmit="event.preventDefault();">
+                    <!-- Main Ship Info -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">วันที่</label>
+                            <input type="date" id="entryDate" required class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อเรือ</label>
+                            <input type="text" id="shipName" required placeholder="เช่น MV.CSAV RIO NEVADO
+" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Add Supervisor Section -->
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+                        <h4 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4 text-blue-500"></i> เพิ่มทีมงาน / หัวหน้างาน
+                        </h4>
+                        
+                        <div class="space-y-3">
+                            <input type="text" id="teamSupervisor" placeholder="ชื่อหัวหน้างาน" class="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">ชาย</label>
+                                    <input type="number" id="teamMale" min="0" placeholder="0" class="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-sky-500 text-center text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">หญิง</label>
+                                    <input type="number" id="teamFemale" min="0" placeholder="0" class="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-pink-500 text-center text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-500 mb-1 block">LGBTQ</label>
+                                    <input type="number" id="teamLgbtq" min="0" placeholder="0" class="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 text-center text-sm">
+                                </div>
+                            </div>
+                            <button type="button" onclick="addTeam()" class="w-full py-2 bg-white border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                                <i data-lucide="plus" class="w-4 h-4"></i> เพิ่มหัวหน้างานคนนี้
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Added Teams List -->
+                    <div id="teamsListContainer" class="hidden mb-6">
+                        <h4 class="text-sm font-bold text-slate-700 mb-2">รายการที่เพิ่มแล้ว (<span id="teamCount">0</span>)</h4>
+                        <div id="teamsList" class="space-y-2">
+                            <!-- Teams will be added here -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 shrink-0">
+                <div class="flex justify-between items-center mb-4 text-sm font-medium text-slate-700">
+                    <span>สรุปยอดรวมทั้งลำ:</span>
+                    <div class="flex gap-3">
+                        <span class="text-sky-600">ชาย <span id="modalTotalMale">0</span></span>
+                        <span class="text-pink-600">หญิง <span id="modalTotalFemale">0</span></span>
+                        <span class="text-purple-600">L <span id="modalTotalLgbtq">0</span></span>
+                        <span class="text-slate-900 font-bold bg-slate-200 px-2 rounded">รวม <span id="modalTotalAll">0</span></span>
+                    </div>
+                </div>
+                <button id="saveButton" onclick="saveEntry()" class="w-full py-3 rounded-lg text-white font-medium flex items-center justify-center gap-2 shadow-lg transition-all bg-slate-400 cursor-not-allowed shadow-none" disabled>
+                    <i data-lucide="save" class="w-5 h-5"></i> บันทึกข้อมูลเรือ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js";
+        import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
+
+        // --- Configuration ---
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyAGZvjNNGb3QQSTf39wYV4Y-UVetDHDlMg",
+          authDomain: "manpower-c3514.firebaseapp.com",
+          databaseURL: "https://manpower-c3514-default-rtdb.firebaseio.com",
+          projectId: "manpower-c3514",
+          storageBucket: "manpower-c3514.firebasestorage.app",
+          messagingSenderId: "467411601360",
+          appId: "1:467411601360:web:16335a08f7e38b9059dbd5",
+          measurementId: "G-7FZ4KGKKGY"
+        };
+
+        // ชื่อแอพสำหรับใช้เป็น Path ใน Database (ไม่เกี่ยวกับ Config ของ Firebase)
+        const appPathName = 'ship-staff-manager';
+        
+        // --- Init ---
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        // --- State ---
+        let currentUser = null;
+        let entries = [];
+        let currentTeams = []; // Temporary storage for teams in modal
+        let currentMonth = new Date().toISOString().slice(0, 7);
+
+        // --- DOM Elements ---
+        const monthFilter = document.getElementById('monthFilter');
+        const loadingState = document.getElementById('loadingState');
+        const errorState = document.getElementById('errorState');
+        const errorMessage = document.getElementById('errorMessage');
+        const mainContent = document.getElementById('mainContent');
+        const shipGrid = document.getElementById('shipGrid');
+        const emptyState = document.getElementById('emptyState');
+        const teamsList = document.getElementById('teamsList');
+        const teamsListContainer = document.getElementById('teamsListContainer');
+        const saveButton = document.getElementById('saveButton');
+
+        // --- Initialization ---
+        window.addEventListener('load', async () => {
+            monthFilter.value = currentMonth;
+            
+            try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch (e) {}
+
+            setTimeout(() => {
+                const timerText = document.getElementById('loadingTimer');
+                if (timerText && !loadingState.classList.contains('hidden')) {
+                    timerText.classList.remove('hidden');
+                }
+            }, 5000);
+            
+            // Auth Flow
+            try {
+                // Modified to handle custom token mismatch
+                let signedIn = false;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                        signedIn = true;
+                    } catch (tokenError) {
+                        console.warn("Custom token mismatch (likely due to custom config), trying anonymous auth:", tokenError);
+                        // Fallback: If custom token fails (mismatch), proceed to anonymous auth
+                    }
+                }
+                
+                if (!signedIn) {
+                    await signInAnonymously(auth);
+                }
+                
+            } catch (error) {
+                console.error("Auth Error:", error);
+                
+                const indicator = document.getElementById('status-indicator');
+                indicator.className = "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors duration-300 text-red-600 bg-red-50 border-red-100";
+                indicator.innerHTML = '<i data-lucide="alert-circle" class="w-3 h-3"></i> <span>เชื่อมต่อไม่ได้</span>';
+                try { lucide.createIcons(); } catch(e) {}
+
+                showError(`การเข้าสู่ระบบล้มเหลว: ${error.message || 'Unknown error'}`);
+            }
+        });
+
+        // Auth Listener
+        onAuthStateChanged(auth, (user) => {
+            const indicator = document.getElementById('status-indicator');
+            if (user) {
+                currentUser = user;
+                
+                indicator.className = "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors duration-300 text-emerald-600 bg-emerald-50 border-emerald-100";
+                indicator.innerHTML = '<i data-lucide="wifi" class="w-3 h-3"></i> <span>ออนไลน์</span>';
+                try { lucide.createIcons(); } catch(e) {}
+
+                setupRealtimeListener();
+            } else {
+                indicator.className = "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors duration-300 text-slate-500 bg-slate-100 border-slate-200";
+                indicator.innerHTML = '<i data-lucide="wifi-off" class="w-3 h-3"></i> <span>ออฟไลน์</span>';
+                try { lucide.createIcons(); } catch(e) {}
+            }
+        });
+
+        // --- Realtime Database Listener ---
+        function setupRealtimeListener() {
+            try {
+                // สร้าง Reference ไปยัง Path ใน RTDB
+                // ใช้ appPathName แทน appId เพื่อป้องกันความสับสนกับ appId ของ Firebase Config
+                const dataRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data`);
+                
+                // ใช้ onValue เพื่อดึงข้อมูลแบบ Realtime
+                onValue(dataRef, (snapshot) => {
+                    const dataObj = snapshot.val();
+                    let data = [];
+                    
+                    if (dataObj) {
+                        // แปลง Object { key: val } เป็น Array [{ id: key, ...val }]
+                        data = Object.keys(dataObj).map(key => ({
+                            id: key,
+                            ...dataObj[key]
+                        }));
+                    }
+                    
+                    // Sort by date descending
+                    data.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    
+                    entries = data;
+                    loadingState.classList.add('hidden');
+                    errorState.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    renderApp();
+                }, (error) => {
+                    console.error("Error fetching data:", error);
+                    showError(`ไม่สามารถดึงข้อมูลได้: ${error.message || 'Permission denied or Network error'}`);
+                });
+            } catch (error) {
+                console.error("Setup Listener Error:", error);
+                showError(`การตั้งค่าการเชื่อมต่อล้มเหลว: ${error.message}`);
+            }
+        }
+
+        // --- Helper: Show Error ---
+        function showError(msg) {
+            loadingState.classList.add('hidden');
+            mainContent.classList.add('hidden');
+            errorState.classList.remove('hidden');
+            errorMessage.textContent = msg;
+            try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch (e) {}
+        }
+
+        // --- Render Functions ---
+        function renderApp() {
+            const filtered = entries.filter(e => e.date && e.date.startsWith(currentMonth));
+            
+            const stats = filtered.reduce((acc, curr) => {
+                acc.male += Number(curr.male || 0);
+                acc.female += Number(curr.female || 0);
+                acc.lgbtq += Number(curr.lgbtq || 0);
+                acc.total += Number(curr.male || 0) + Number(curr.female || 0) + Number(curr.lgbtq || 0);
+                return acc;
+            }, { male: 0, female: 0, lgbtq: 0, total: 0 });
+
+            document.getElementById('displayMonth').textContent = currentMonth;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statShips').textContent = filtered.length;
+            document.getElementById('statMale').textContent = stats.male;
+            document.getElementById('statFemale').textContent = stats.female;
+            document.getElementById('statLgbtq').textContent = stats.lgbtq;
+            document.getElementById('shipCount').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+                shipGrid.innerHTML = '';
+            } else {
+                emptyState.classList.add('hidden');
+                shipGrid.innerHTML = filtered.map(entry => createShipCard(entry)).join('');
+                try { lucide.createIcons(); } catch(e) {}
+            }
+        }
+
+        function createShipCard(entry) {
+            const total = (entry.male || 0) + (entry.female || 0) + (entry.lgbtq || 0);
+            
+            let teamsHtml = '';
+            if (entry.teams && entry.teams.length > 0) {
+                teamsHtml = entry.teams.map(team => `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between text-sm pb-2 border-b border-slate-50 last:border-0 last:pb-0">
+                        <div class="font-medium text-slate-700 mb-1 sm:mb-0">${team.supervisorName}</div>
+                        <div class="flex items-center gap-2 text-xs">
+                            <span class="bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded">ช ${team.male}</span>
+                            <span class="bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded">ญ ${team.female}</span>
+                            <span class="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">L ${team.lgbtq}</span>
+                            <span class="font-bold text-slate-400 ml-1">(${team.male + team.female + team.lgbtq})</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                const supervisor = Array.isArray(entry.supervisors) ? entry.supervisors.join(", ") : (entry.supervisor || "-");
+                teamsHtml = `<div class="text-sm text-slate-500 italic">หัวหน้า: ${supervisor}</div>`;
+            }
+
+            return `
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-200 flex flex-col h-full">
+                    <div class="bg-slate-50 px-5 py-4 border-b border-slate-100 flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <i data-lucide="ship" class="w-5 h-5 text-blue-600"></i>
+                                ${entry.shipName}
+                            </h3>
+                            <div class="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                <span>วันที่: ${entry.date}</span>
+                                <span class="bg-slate-200 w-1 h-1 rounded-full"></span>
+                                <span>รวม ${total} คน</span>
+                            </div>
+                        </div>
+                        <button onclick="window.deleteEntry('${entry.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-1">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="p-4 flex-grow bg-white">
+                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">รายละเอียดหัวหน้างาน</p>
+                        <div class="space-y-3">
+                            ${teamsHtml}
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 px-5 py-3 border-t border-slate-100 grid grid-cols-3 text-center text-sm">
+                        <div><span class="text-sky-600 font-bold">${entry.male}</span> <span class="text-slate-400 text-xs">ช</span></div>
+                        <div><span class="text-pink-600 font-bold">${entry.female}</span> <span class="text-slate-400 text-xs">ญ</span></div>
+                        <div><span class="text-purple-600 font-bold">${entry.lgbtq}</span> <span class="text-slate-400 text-xs">L</span></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Interaction Handlers ---
+        
+        monthFilter.addEventListener('change', (e) => {
+            currentMonth = e.target.value;
+            renderApp();
+        });
+
+        window.openModal = function() {
+            document.getElementById('entryModal').classList.remove('hidden');
+            document.getElementById('entryDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('shipName').value = '';
+            document.getElementById('teamSupervisor').value = '';
+            document.getElementById('teamMale').value = '';
+            document.getElementById('teamFemale').value = '';
+            document.getElementById('teamLgbtq').value = '';
+            
+            currentTeams = [];
+            renderTeamsList();
+        }
+
+        window.closeModal = function() {
+            document.getElementById('entryModal').classList.add('hidden');
+        }
+
+        window.addTeam = function() {
+            const name = document.getElementById('teamSupervisor').value.trim();
+            if (!name) {
+                alert("กรุณาระบุชื่อหัวหน้างาน");
+                return;
+            }
+
+            const team = {
+                id: Date.now(),
+                supervisorName: name,
+                male: Number(document.getElementById('teamMale').value) || 0,
+                female: Number(document.getElementById('teamFemale').value) || 0,
+                lgbtq: Number(document.getElementById('teamLgbtq').value) || 0
+            };
+
+            currentTeams.push(team);
+            renderTeamsList();
+
+            document.getElementById('teamSupervisor').value = '';
+            document.getElementById('teamMale').value = '';
+            document.getElementById('teamFemale').value = '';
+            document.getElementById('teamLgbtq').value = '';
+        }
+
+        window.removeTeam = function(id) {
+            currentTeams = currentTeams.filter(t => t.id !== id);
+            renderTeamsList();
+        }
+
+        function renderTeamsList() {
+            if (currentTeams.length > 0) {
+                teamsListContainer.classList.remove('hidden');
+                document.getElementById('teamCount').textContent = currentTeams.length;
+                teamsList.innerHTML = currentTeams.map(team => `
+                    <div class="bg-white border border-slate-200 p-3 rounded-lg flex justify-between items-center shadow-sm">
+                        <div>
+                            <div class="font-medium text-slate-800 text-sm">${team.supervisorName}</div>
+                            <div class="text-xs text-slate-500 mt-0.5 flex gap-2">
+                                <span>ช: ${team.male}</span>
+                                <span>ญ: ${team.female}</span>
+                                <span>L: ${team.lgbtq}</span>
+                                <span class="font-semibold text-slate-400">รวม: ${team.male + team.female + team.lgbtq}</span>
+                            </div>
+                        </div>
+                        <button onclick="removeTeam(${team.id})" class="text-slate-400 hover:text-red-500 p-1">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `).join('');
+                try { lucide.createIcons(); } catch(e) {}
+            } else {
+                teamsListContainer.classList.add('hidden');
+            }
+
+            const totals = currentTeams.reduce((acc, t) => ({
+                male: acc.male + t.male,
+                female: acc.female + t.female,
+                lgbtq: acc.lgbtq + t.lgbtq
+            }), { male: 0, female: 0, lgbtq: 0 });
+
+            document.getElementById('modalTotalMale').textContent = totals.male;
+            document.getElementById('modalTotalFemale').textContent = totals.female;
+            document.getElementById('modalTotalLgbtq').textContent = totals.lgbtq;
+            document.getElementById('modalTotalAll').textContent = totals.male + totals.female + totals.lgbtq;
+
+            if (currentTeams.length > 0) {
+                saveButton.disabled = false;
+                saveButton.classList.remove('bg-slate-400', 'cursor-not-allowed', 'shadow-none');
+                saveButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-600/20');
+            } else {
+                saveButton.disabled = true;
+                saveButton.classList.add('bg-slate-400', 'cursor-not-allowed', 'shadow-none');
+                saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-600/20');
+            }
+        }
+
+        // Save Entry to Realtime Database
+        window.saveEntry = async function() {
+            const shipName = document.getElementById('shipName').value.trim();
+            const date = document.getElementById('entryDate').value;
+            
+            if (!shipName) { alert("กรุณาระบุชื่อเรือ"); return; }
+            if (currentTeams.length === 0) { alert("กรุณาเพิ่มหัวหน้างานอย่างน้อย 1 คน"); return; }
+            if (!currentUser) return;
+
+            const totalMale = currentTeams.reduce((sum, t) => sum + t.male, 0);
+            const totalFemale = currentTeams.reduce((sum, t) => sum + t.female, 0);
+            const totalLgbtq = currentTeams.reduce((sum, t) => sum + t.lgbtq, 0);
+            const supervisorNames = currentTeams.map(t => t.supervisorName);
+
+            try {
+                // สร้าง Reference และ ID ใหม่โดยอัตโนมัติ (push)
+                const dataRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data`);
+                const newRef = push(dataRef);
+                
+                await set(newRef, {
+                    shipName: shipName,
+                    date: date,
+                    teams: currentTeams,
+                    male: totalMale,
+                    female: totalFemale,
+                    lgbtq: totalLgbtq,
+                    supervisors: supervisorNames,
+                    createdAt: new Date().toISOString()
+                });
+                closeModal();
+            } catch (error) {
+                console.error("Error saving:", error);
+                alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+            }
+        }
+
+        // Delete Entry from Realtime Database
+        window.deleteEntry = async function(id) {
+            if (confirm("ต้องการลบข้อมูลเรือลำนี้ใช่หรือไม่?")) {
+                try {
+                    // ลบข้อมูลที่ path ตาม ID
+                    const itemRef = ref(db, `artifacts/${appPathName}/users/${currentUser.uid}/ship-staff-data/${id}`);
+                    await remove(itemRef);
+                } catch (error) {
+                    console.error("Error deleting:", error);
+                    alert("เกิดข้อผิดพลาดในการลบข้อมูล");
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>
